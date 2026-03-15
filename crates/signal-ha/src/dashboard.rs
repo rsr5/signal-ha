@@ -604,4 +604,28 @@ config:
         let yaml = "not: [valid: yaml: {";
         assert!(DashboardSpec::from_yaml(yaml).is_err());
     }
+
+    #[test]
+    fn dashboard_spec_jinja_template_in_content() {
+        let yaml = r#"
+url_path: signal-test
+title: Test
+config:
+  views:
+    - title: Agent
+      cards:
+        - type: markdown
+          content: >
+            {{ state_attr('sensor.test_summary', 'markdown') or 'No report.' }}
+        - type: entities
+          entities:
+            - sensor.test_summary
+"#;
+        let spec = DashboardSpec::from_yaml(yaml).unwrap();
+        assert_eq!(spec.url_path, "signal-test");
+        let content = spec.config["views"][0]["cards"][0]["content"]
+            .as_str()
+            .unwrap();
+        assert!(content.contains("state_attr"));
+    }
 }

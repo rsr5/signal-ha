@@ -197,3 +197,57 @@ config:
 |:-------|:--------|
 | `from_yaml(yaml)` | Parse a dashboard spec from a YAML string |
 | `ensure(client)` | Push the dashboard to HA (create-or-update) |
+
+#### Layout Card
+
+Dashboards use `layout-card` (HACS custom card) for CSS Grid layouts.
+Each view sets `type: custom:grid-layout` with a `layout` block:
+
+```yaml
+custom_cards:
+  - layout-card
+
+config:
+  views:
+    - title: Status
+      type: custom:grid-layout
+      layout:
+        grid-template-columns: 1fr 1fr
+        mediaquery:
+          "(max-width: 800px)":
+            grid-template-columns: 1fr
+      cards:
+        - type: heading
+          view_layout:
+            grid-column: 1 / -1    # full-width
+        - type: entities            # left column
+        - type: gauge               # right column
+```
+
+Use `view_layout.grid-column: 1 / -1` on cards that should span full width
+(headings, history graphs, info cards).
+
+#### Agent View
+
+Every automation dashboard should include an **Agent** view that displays
+the embedded agent's latest summary. The markdown card uses a Jinja template
+to read from a sensor entity's `markdown` attribute:
+
+```yaml
+- title: Agent
+  path: agent
+  icon: "mdi:robot"
+  type: custom:grid-layout
+  layout:
+    grid-template-columns: 1fr
+  cards:
+    - type: markdown
+      title: "Latest Report"
+      content: >
+        {{ state_attr('sensor.signal_<name>_agent_summary', 'markdown')
+           or 'No agent report yet.' }}
+    - type: entities
+      entities:
+        - entity: sensor.signal_<name>_agent_summary
+          name: Last updated
+```

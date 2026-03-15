@@ -84,3 +84,43 @@ let handle = AgentHandle::spawn(config).await;
 !!! info "Panic isolation"
     Panics in agent code are caught and logged — they never propagate to the
     host automation process.
+
+## Dashboard Awareness
+
+If an automation manages a Lovelace dashboard (via `DashboardSpec`), the
+agent can be told about it by setting `dashboard_url_path` in `AgentConfig`.
+
+When configured, the agent gains:
+
+- **System prompt context** — told about the dashboard URL and its Agent view.
+- **`list_dashboards()`** — list all Lovelace dashboards (url_path, title, icon).
+- **`get_dashboard(url_path)`** — fetch full Lovelace config for a dashboard.
+- **`update_agent_summary(markdown)`** — publish a markdown summary to the
+  dashboard's Agent view. This writes to a sensor entity (e.g.
+  `sensor.signal_porch_lights_agent_summary`) whose `markdown` attribute is
+  rendered by a Jinja-templated markdown card on the dashboard.
+
+### Agent View
+
+Each automation dashboard has an **Agent** tab with:
+
+- A markdown card rendering the agent's latest summary via Jinja template
+- An entities card showing when the summary was last updated
+
+Agents are instructed to call `update_agent_summary()` on their final turn
+with a concise report of findings.
+
+### Configuration
+
+```rust
+// In HaHost construction
+let ha_host = HaHost::new(client, base_url, ws_url, token, status_url)
+    .with_board(board_url, "porch-agent".into())
+    .with_agent_summary_entity("sensor.signal_porch_lights_agent_summary".into());
+
+// In AgentConfig
+AgentConfig {
+    dashboard_url_path: Some("signal-porch-lights".into()),
+    // ...
+};
+```

@@ -4,7 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Selective entity state recorder with SQLite storage — subscribe, record, query, prune"
+description = "Pluggable entity state recorder — trait-based storage with SQLite and MySQL backends"
+
+[features]
+default = ["sqlite"]
+sqlite = ["dep:rusqlite"]
+mysql = ["dep:mysql"]
 
 [dependencies]
 # Async runtime
@@ -23,8 +28,11 @@ tracing = { workspace = true }
 # Error handling
 thiserror = { workspace = true }
 
-# SQLite
-rusqlite = { version = "0.32", features = ["bundled"] }
+# SQLite (optional backend)
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+
+# MySQL (optional backend)
+mysql = { version = "25", optional = true }
 
 # The core library (HaClient, EntityState, StateChange)
 signal-ha = { workspace = true }

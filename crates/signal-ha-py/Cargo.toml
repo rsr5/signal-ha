@@ -1,0 +1,23 @@
+[package]
+name = "signal-ha-py"
+description = "Python bindings for signal-ha (Home Assistant automation library)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "signal_ha_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+signal-ha = { workspace = true }
+pyo3 = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = "0.25"

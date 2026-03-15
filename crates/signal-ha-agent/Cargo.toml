@@ -1,0 +1,40 @@
+[package]
+name = "signal-ha-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Embedded LLM observation agent for signal-ha automations — uses HA Conversation API"
+
+[dependencies]
+# The automation library (HaClient, EntityState, etc.)
+signal-ha = { path = "../signal-ha" }
+
+# Shared Python runtime (Monty REPL, host call mapping, conversions)
+signal-ha-shell = { path = "../signal-ha-shell" }
+
+# Re-export monty types needed by engine.rs
+monty = { git = "https://github.com/pydantic/monty.git", branch = "main" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# HTTP client (HA REST history API)
+reqwest = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["test-util", "macros"] }

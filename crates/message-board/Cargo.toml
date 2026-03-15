@@ -1,0 +1,36 @@
+[package]
+name = "message-board"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Findings board REST API for signal-ha agents — SQLite-backed posts & replies"
+
+[[bin]]
+name = "message-board"
+path = "src/main.rs"
+
+[dependencies]
+# HTTP server
+axum = { workspace = true }
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# SQLite
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = "1"
+tempfile = "3"

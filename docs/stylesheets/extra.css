@@ -1,0 +1,351 @@
+/* ============================================================
+   signal-ha — MkDocs Material Custom Theme
+   Dark bg, sage-green accent, Iosevka monospace, minimal UI
+   Matches the Southside incident-detected aesthetic
+   ============================================================ */
+
+/* ── Fonts ─────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Iosevka Web';
+  font-style: normal;
+  font-weight: 400;
+  src: url('https://cdn.jsdelivr.net/npm/@aspect/iosevka-fonts@1.0.1/fonts/iosevka-regular.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Iosevka Web';
+  font-style: normal;
+  font-weight: 500;
+  src: url('https://cdn.jsdelivr.net/npm/@aspect/iosevka-fonts@1.0.1/fonts/iosevka-medium.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Iosevka Web';
+  font-style: normal;
+  font-weight: 700;
+  src: url('https://cdn.jsdelivr.net/npm/@aspect/iosevka-fonts@1.0.1/fonts/iosevka-bold.woff2') format('woff2');
+  font-display: swap;
+}
+
+/* ── Palette — Dark mode overrides ─────────────────────────── */
+
+[data-md-color-scheme="slate"] {
+
+  /* Core surfaces */
+  --md-default-bg-color:              #0a0a0a;
+  --md-default-bg-color--light:       #111111;
+  --md-default-bg-color--lighter:     #141414;
+  --md-default-bg-color--lightest:    #1a1a1a;
+
+  /* Text */
+  --md-default-fg-color:              #a3a3a3;
+  --md-default-fg-color--light:       #808080;
+  --md-default-fg-color--lighter:     #606060;
+  --md-default-fg-color--lightest:    #404040;
+
+  /* Accent — sage green */
+  --md-primary-fg-color:              #1a1a1a;
+  --md-primary-bg-color:              #a3a3a3;
+  --md-accent-fg-color:               #6b9a8a;
+  --md-accent-fg-color--transparent:  rgba(107, 154, 138, 0.12);
+
+  /* Typography */
+  --md-typeset-color:                 #a3a3a3;
+  --md-typeset-a-color:               #6b9a8a;
+
+  /* Code */
+  --md-code-bg-color:                 #111111;
+  --md-code-fg-color:                 #a3a3a3;
+  --md-code-hl-color:                 rgba(107, 154, 138, 0.15);
+
+  /* Footer */
+  --md-footer-bg-color:               #0a0a0a;
+  --md-footer-bg-color--dark:         #050505;
+  --md-footer-fg-color:               #606060;
+  --md-footer-fg-color--light:        #808080;
+  --md-footer-fg-color--lighter:      #a3a3a3;
+
+  /* Typeset links */
+  --md-typeset-mark-color:            rgba(107, 154, 138, 0.25);
+
+  /* Fonts */
+  --md-text-font: 'Iosevka Web', 'Iosevka', 'Consolas', 'SF Mono', monospace;
+  --md-code-font: 'Iosevka Web', 'Iosevka', 'Consolas', 'SF Mono', monospace;
+}
+
+/* ── Header bar ────────────────────────────────────────────── */
+
+.md-header {
+  background: #0a0a0a;
+  border-bottom: 1px solid #1a1a1a;
+  box-shadow: none;
+}
+
+.md-header__title {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* ── Navigation tabs ───────────────────────────────────────── */
+
+.md-tabs {
+  background: #0a0a0a;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.md-tabs__link {
+  font-size: .75rem;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  opacity: 1;
+  color: #6b9a8a;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+
+.md-sidebar {
+  background: #0a0a0a;
+}
+
+.md-nav__link {
+  font-size: .82rem;
+}
+
+.md-nav__link:hover,
+.md-nav__link--active {
+  color: #6b9a8a;
+}
+
+.md-nav__item--nested > .md-nav__link {
+  font-weight: 500;
+}
+
+/* Section labels in left nav */
+.md-nav--primary > .md-nav__list > .md-nav__item > .md-nav__link {
+  text-transform: uppercase;
+  font-size: .7rem;
+  letter-spacing: 0.1em;
+  color: #606060;
+}
+
+/* ── Content area ──────────────────────────────────────────── */
+
+.md-typeset {
+  font-size: .85rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #d4d4d4;
+}
+
+.md-typeset h2 {
+  font-weight: 500;
+  color: #b0b0b0;
+  border-bottom: 1px solid #1a1a1a;
+  padding-bottom: 0.4em;
+}
+
+.md-typeset h3,
+.md-typeset h4 {
+  font-weight: 500;
+  color: #999;
+}
+
+.md-typeset a {
+  color: #6b9a8a;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.md-typeset a:hover {
+  border-bottom-color: #6b9a8a;
+}
+
+/* ── Code blocks ───────────────────────────────────────────── */
+
+.md-typeset code {
+  background: #141414;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-size: 0.85em;
+  color: #6b9a8a;
+}
+
+.md-typeset pre {
+  background: #111111;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+}
+
+.md-typeset pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #a3a3a3;
+}
+
+/* Code copy button */
+.md-clipboard {
+  color: #606060;
+}
+
+.md-clipboard:hover {
+  color: #6b9a8a;
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
+
+.md-typeset table:not([class]) {
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: .82rem;
+}
+
+.md-typeset table:not([class]) th {
+  background: #141414;
+  color: #808080;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: .7rem;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.md-typeset table:not([class]) td {
+  border-bottom: 1px solid #111111;
+}
+
+.md-typeset table:not([class]) tr:hover td {
+  background: #111111;
+}
+
+/* ── Admonitions ───────────────────────────────────────────── */
+
+.md-typeset .admonition,
+.md-typeset details {
+  background: #111111;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  border-left: 3px solid #6b9a8a;
+  box-shadow: none;
+}
+
+.md-typeset .admonition-title,
+.md-typeset details summary {
+  background: #141414;
+  border-bottom: 1px solid #1a1a1a;
+  font-weight: 500;
+}
+
+.md-typeset .admonition.warning,
+.md-typeset .admonition.danger {
+  border-left-color: #c97a5a;
+}
+
+.md-typeset .admonition.tip,
+.md-typeset .admonition.success {
+  border-left-color: #6b9a8a;
+}
+
+.md-typeset .admonition.info,
+.md-typeset .admonition.note {
+  border-left-color: #5a7a9a;
+}
+
+/* ── Search ────────────────────────────────────────────────── */
+
+.md-search__form {
+  background: #141414;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+}
+
+.md-search__input {
+  font-family: var(--md-text-font);
+}
+
+.md-search-result {
+  background: #111111;
+}
+
+.md-search-result__link:hover {
+  background: #1a1a1a;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+
+.md-footer {
+  border-top: 1px solid #1a1a1a;
+}
+
+/* ── Mermaid diagrams ──────────────────────────────────────── */
+
+.mermaid {
+  background: #111111 !important;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* ── Scrollbars (webkit) ───────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a2a;
+}
+
+/* ── Misc polish ───────────────────────────────────────────── */
+
+.md-typeset .md-button {
+  border-color: #6b9a8a;
+  color: #6b9a8a;
+}
+
+.md-typeset .md-button:hover {
+  background: #6b9a8a;
+  color: #0a0a0a;
+  border-color: #6b9a8a;
+}
+
+.md-typeset .md-tag {
+  background: #141414;
+  border: 1px solid #1a1a1a;
+  color: #808080;
+}
+
+.md-top {
+  background: #141414;
+  border: 1px solid #1a1a1a;
+  color: #6b9a8a;
+}
+
+::selection {
+  background: rgba(107, 154, 138, 0.3);
+  color: #d4d4d4;
+}

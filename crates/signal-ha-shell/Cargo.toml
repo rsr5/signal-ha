@@ -1,0 +1,28 @@
+[package]
+name = "signal-ha-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = """
+Shared Python runtime for Signal Deck and signal-ha-agent.
+
+Wraps the Monty pure-Rust Python interpreter with:
+- REPL lifecycle (init, feed, start, resume)
+- External function registry (state, history, statistics, etc.)
+- Host call mapping (Python function args → method + JSON params)
+- MontyObject ↔ JSON conversion
+- EntityState dataclass construction
+
+This crate is the canonical native implementation. Signal Deck's
+shell-engine (WASM) should depend on this crate, adding only the
+WASM wrapper and UI-specific rendering on top.
+"""
+
+[dependencies]
+# Monty — pure-Rust Python interpreter
+monty = { git = "https://github.com/pydantic/monty.git", branch = "main" }
+
+# Serialization (for host call params and JSON conversion)
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,61 @@
+site_name: signal-ha
+site_description: Async Rust toolkit for Home Assistant automations
+repo_url: https://github.com/rsr5/signal-ha
+repo_name: rsr5/signal-ha
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+  font: false
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/home-automation
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Crates:
+      - signal-ha: crates/signal-ha.md
+      - signal-ha-lighting: crates/signal-ha-lighting.md
+      - signal-ha-agent: crates/signal-ha-agent.md
+      - signal-ha-shell: crates/signal-ha-shell.md
+      - signal-ha-py: crates/signal-ha-py.md
+      - message-board: crates/message-board.md
+  - Architecture: architecture.md
+  - Getting Started: getting-started.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search

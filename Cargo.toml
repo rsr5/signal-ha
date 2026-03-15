@@ -1,0 +1,60 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/signal-ha",
+    "crates/signal-ha-lighting",
+    "crates/signal-ha-agent",
+    "crates/signal-ha-shell",
+    "crates/signal-ha-py",
+    "crates/message-board",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["rsr5"]
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3"
+
+# WebSocket
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# HTTP (for HA REST API — set_state, etc.)
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }
+
+# HTTP server (status page)
+axum = "0.8"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Sun calculations
+sunrise = "3"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Config
+figment = { version = "0.10", features = ["yaml", "env"] }
+
+# Python bindings
+pyo3 = { version = "0.25", features = ["extension-module"] }
+
+# The libraries
+signal-ha = { path = "crates/signal-ha" }
+signal-ha-lighting = { path = "crates/signal-ha-lighting" }

@@ -1,0 +1,21 @@
+[package]
+name = "signal-ha"
+description = "Async Rust library for writing Home Assistant automations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-tungstenite = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+sunrise = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }

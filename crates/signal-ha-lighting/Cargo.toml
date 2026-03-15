@@ -1,0 +1,13 @@
+[package]
+name = "signal-ha-lighting"
+description = "Shared lighting primitives — actuator, overlay, reconciler, targets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }

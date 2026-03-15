@@ -1,0 +1,10 @@
+target/
+site/
+*.so
+*.dylib
+*.pyd
+__pycache__/
+.venv/
+*.egg-info/
+dist/
+.env

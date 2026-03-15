@@ -6,6 +6,7 @@ members = [
     "crates/signal-ha-agent",
     "crates/signal-ha-shell",
     "crates/signal-ha-py",
+    "crates/signal-ha-recorder",
     "crates/message-board",
 ]
 

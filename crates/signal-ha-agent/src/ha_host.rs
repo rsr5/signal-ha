@@ -34,6 +34,9 @@ pub struct HaHost {
     pub board_url: Option<String>,
     /// Agent name — auto-injected into board posts/replies.
     pub agent_name: String,
+    /// Entity ID for agent summary sensor (e.g. "sensor.signal_porch_lights_agent_summary").
+    /// If set, `update_agent_summary()` writes markdown to this entity.
+    pub agent_summary_entity: Option<String>,
     /// Directory for agent memory files (house-agent reads other agents').
     pub memory_dir: Option<String>,
     /// Directory for session transcripts (house-agent reads other agents').
@@ -58,6 +61,7 @@ impl HaHost {
             status_page_url,
             board_url: None,
             agent_name: String::new(),
+            agent_summary_entity: None,
             memory_dir: None,
             transcript_dir: None,
         }
@@ -67,6 +71,12 @@ impl HaHost {
     pub fn with_board(mut self, url: String, agent_name: String) -> Self {
         self.board_url = Some(url);
         self.agent_name = agent_name;
+        self
+    }
+
+    /// Configure the agent summary entity.
+    pub fn with_agent_summary_entity(mut self, entity: String) -> Self {
+        self.agent_summary_entity = Some(entity);
         self
     }
 
@@ -200,6 +210,7 @@ impl HaHost {
             // ── Dashboards ────────────────────────────────────
             "list_dashboards" => self.list_dashboards(params).await,
             "get_dashboard" => self.get_dashboard(params).await,
+            "update_agent_summary" => self.update_agent_summary(params).await,
             // ── House agent (cross-agent access) ────────────────
             "board_get_all_posts" => self.board_get_all_posts(params).await,
             "read_agent_memory" => self.read_agent_memory(params).await,
@@ -816,6 +827,48 @@ impl HaHost {
         }
 
         Ok(resp.get("result").cloned().unwrap_or(json!(null)))
+    }
+
+    async fn update_agent_summary(&self, params: &Value) -> Result<Value> {
+        let entity_id = self
+            .agent_summary_entity
+            .as_deref()
+            .ok_or_else(|| anyhow!("update_agent_summary: no summary entity configured"))?;
+        let content = params["content"]
+            .as_str()
+            .ok_or_else(|| anyhow!("update_agent_summary: missing content"))?;
+
+        let now = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+
+        // Write via REST set_state — creates the sensor if it doesn't exist
+        let url = format!("{}/api/states/{}", self.ha_base_url, entity_id);
+        let body = json!({
+            "state": now,
+            "attributes": {
+                "markdown": content,
+                "friendly_name": format!("{} Agent Summary", self.agent_name),
+                "icon": "mdi:robot",
+                "updated_by": self.agent_name,
+            }
+        });
+
+        let resp = self
+            .http
+            .post(&url)
+            .bearer_auth(&self.ha_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("update_agent_summary: REST failed: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("update_agent_summary: HTTP {status}: {text}"));
+        }
+
+        info!(entity_id, "Agent summary updated");
+        Ok(json!({ "ok": true, "entity_id": entity_id, "updated_at": now }))
     }
 
     async fn read_agent_memory(&self, params: &Value) -> Result<Value> {

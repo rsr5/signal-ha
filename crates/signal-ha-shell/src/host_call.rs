@@ -225,6 +225,11 @@ pub fn map_ext_call_to_host_call(
             let url_path = extract_string(args, 0)?;
             Some(("get_dashboard", serde_json::json!({ "url_path": url_path })))
         }
+        "update_agent_summary" => {
+            // update_agent_summary("markdown content")
+            let content = extract_string(args, 0)?;
+            Some(("update_agent_summary", serde_json::json!({ "content": content })))
+        }
 
         // ── House agent (cross-agent functions) ────────────────
         "read_agent_memory" => {

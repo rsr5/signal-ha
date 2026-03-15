@@ -290,6 +290,7 @@ async fn run_session(ctx: &SessionCtx) -> Result<Option<Duration>> {
             "board_create_post",
             "board_reply",
             "board_close_post",
+            "update_agent_summary",
         ],
         ctx.disallowed_calls.clone(),
         memory_handle,
@@ -641,6 +642,7 @@ The board is a persistent store for findings that survive across sessions. Use i
 ### Dashboards
 - `list_dashboards()` → list of all Lovelace dashboards (url_path, title, icon, mode)
 - `get_dashboard("url_path")` → full Lovelace config for a dashboard (views, cards, entities)
+- `update_agent_summary("markdown text")` → publish your session summary to the Agent view on the dashboard
 
 Use these to inspect the dashboard this automation manages. Check that all entities shown on the dashboard are working and that the layout makes sense.
 
@@ -682,6 +684,7 @@ Your memory persists between sessions via `set_agent_memory()`. **Call it before
 - **Use your memory.** Check what you found last session. Don't repeat the same analysis — build on it. If you suggested something last time, check if anything changed.
 - **Save your memory on your final turn.** Call `set_agent_memory("...")` with a concise summary of what you found, open questions, and suggestions for next time.
 - **All communication goes through the board.** Do not write session summaries or reports in your final message. If you found something worth reporting, it should already be a board post. When done, just reply with NO code block to end the session.
+- **Update the dashboard summary.** On your final turn, call `update_agent_summary("...")` with a brief markdown summary: what you checked, key findings, and any open questions. This is shown on the Agent tab of the automation's dashboard in HA. Keep it concise — a few bullet points, not an essay.
 - **House agent.** A weekly overseer agent reviews all rooms' board posts and memories. If you see a reply from `house-agent` on one of your posts, treat it like a colleague's input — act on it, respond, or close the post as appropriate."#,
         name = ctx.name,
         role = ctx.role,
@@ -704,6 +707,10 @@ Your memory persists between sessions via `set_agent_memory()`. **Call it before
                 "## Dashboard\n\n\
                  This automation manages a Lovelace dashboard at **`/{url_path}`**.\n\n\
                  The dashboard config is pushed from git on every deploy — do not edit it in the HA UI.\n\n\
+                 The dashboard has an **Agent** view where your summary is displayed. \
+                 At the end of every session, call `update_agent_summary(\"...\")` with a \
+                 concise markdown summary of your findings. This is rendered in the HA dashboard \
+                 so the user can see your latest report at a glance.\n\n\
                  As part of your health check, use `get_dashboard(\"{url_path}\")` to inspect the \
                  dashboard config. Verify that the entities shown on the dashboard are responsive \
                  and that the cards display meaningful data. If you spot an entity that is \

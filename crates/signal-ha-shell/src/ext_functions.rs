@@ -65,6 +65,7 @@ pub const HA_EXTERNAL_FUNCTIONS: &[&str] = &[
     // ── Dashboards ─────────────────────────────────────────────
     "list_dashboards",
     "get_dashboard",
+    "update_agent_summary",
 
     // ── House agent (cross-agent access) ───────────────────────
     "read_agent_memory",

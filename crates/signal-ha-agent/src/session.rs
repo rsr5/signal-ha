@@ -86,6 +86,11 @@ pub struct AgentConfig {
     /// Gives the agent grounded temporal awareness so it can reason
     /// about "how long ago" events occurred. Default: true.
     pub inject_current_time: bool,
+
+    /// URL path of the Lovelace dashboard this automation manages.
+    /// If set, the agent is told about the dashboard and gets tools
+    /// to inspect it (`list_dashboards()`, `get_dashboard(url_path)`).
+    pub dashboard_url_path: Option<String>,
 }
 
 /// Handle to a running agent background task.
@@ -167,6 +172,7 @@ async fn agent_loop(
         disallowed_calls: config.disallowed_calls,
         transcript_dir: config.transcript_dir,
         inject_current_time: config.inject_current_time,
+        dashboard_url_path: config.dashboard_url_path,
     };
 
     loop {
@@ -224,6 +230,7 @@ struct SessionCtx {
     disallowed_calls: Vec<String>,
     transcript_dir: Option<String>,
     inject_current_time: bool,
+    dashboard_url_path: Option<String>,
 }
 
 /// Run a single agent session — one multi-turn conversation.
@@ -631,6 +638,12 @@ The board is a persistent store for findings that survive across sessions. Use i
 
 **Each session, review your open posts.** Check whether the issue is still visible in current data. If the user replied with a correction or resolution, or the issue no longer appears in logs/state, close it with `board_close_post(post_id)`. Don't let stale posts accumulate.
 
+### Dashboards
+- `list_dashboards()` → list of all Lovelace dashboards (url_path, title, icon, mode)
+- `get_dashboard("url_path")` → full Lovelace config for a dashboard (views, cards, entities)
+
+Use these to inspect the dashboard this automation manages. Check that all entities shown on the dashboard are working and that the layout makes sense.
+
 ### Important notes
 
 - **No stdlib.** `import json`, `import datetime`, etc. will fail. Use the built-in functions above instead.
@@ -656,6 +669,8 @@ Your memory persists between sessions via `set_agent_memory()`. **Call it before
 {memory_section}
 
 {board_section}
+
+{dashboard_section}
 
 ## Guidelines
 
@@ -684,6 +699,18 @@ Your memory persists between sessions via `set_agent_memory()`. **Call it before
             format!("PREVIOUS SESSION MEMORY:\n{memory_text}")
         },
         board_section = board_section,
+        dashboard_section = match &ctx.dashboard_url_path {
+            Some(url_path) => format!(
+                "## Dashboard\n\n\
+                 This automation manages a Lovelace dashboard at **`/{url_path}`**.\n\n\
+                 The dashboard config is pushed from git on every deploy — do not edit it in the HA UI.\n\n\
+                 As part of your health check, use `get_dashboard(\"{url_path}\")` to inspect the \
+                 dashboard config. Verify that the entities shown on the dashboard are responsive \
+                 and that the cards display meaningful data. If you spot an entity that is \
+                 `unavailable` or `unknown`, flag it on the board."
+            ),
+            None => "## Dashboard\n\n(No dashboard configured for this automation.)".to_string(),
+        },
     );
 
     Ok(prompt)

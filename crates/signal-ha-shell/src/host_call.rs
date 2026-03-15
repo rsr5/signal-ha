@@ -216,6 +216,16 @@ pub fn map_ext_call_to_host_call(
             Some(("board_close_post", serde_json::json!({ "post_id": post_id })))
         }
 
+        // ── Dashboards ─────────────────────────────────────────
+        "list_dashboards" => {
+            Some(("list_dashboards", serde_json::json!({})))
+        }
+        "get_dashboard" => {
+            // get_dashboard("signal-porch-lights") → full config for a dashboard
+            let url_path = extract_string(args, 0)?;
+            Some(("get_dashboard", serde_json::json!({ "url_path": url_path })))
+        }
+
         // ── House agent (cross-agent functions) ────────────────
         "read_agent_memory" => {
             // read_agent_memory("porch-agent")

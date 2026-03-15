@@ -197,6 +197,9 @@ impl HaHost {
             "board_create_post" => self.board_create_post(params).await,
             "board_reply" => self.board_reply(params).await,
             "board_close_post" => self.board_close_post(params).await,
+            // ── Dashboards ────────────────────────────────────
+            "list_dashboards" => self.list_dashboards(params).await,
+            "get_dashboard" => self.get_dashboard(params).await,
             // ── House agent (cross-agent access) ────────────────
             "board_get_all_posts" => self.board_get_all_posts(params).await,
             "read_agent_memory" => self.read_agent_memory(params).await,
@@ -775,6 +778,44 @@ impl HaHost {
             return Err(anyhow!("board_get_all_posts: HTTP {}", resp.status()));
         }
         Ok(resp.json().await?)
+    }
+
+    // ── Dashboards ─────────────────────────────────────────────
+
+    async fn list_dashboards(&self, _params: &Value) -> Result<Value> {
+        let resp = self
+            .send_raw(json!({
+                "type": "lovelace/dashboards/list",
+            }))
+            .await?;
+        let dashboards = resp
+            .get("result")
+            .cloned()
+            .unwrap_or(json!([]));
+        Ok(dashboards)
+    }
+
+    async fn get_dashboard(&self, params: &Value) -> Result<Value> {
+        let url_path = params["url_path"]
+            .as_str()
+            .ok_or_else(|| anyhow!("get_dashboard: missing url_path"))?;
+
+        let resp = self
+            .send_raw(json!({
+                "type": "lovelace/config",
+                "url_path": url_path,
+            }))
+            .await?;
+
+        if resp.get("success").and_then(|v| v.as_bool()) != Some(true) {
+            let msg = resp
+                .pointer("/error/message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error");
+            return Err(anyhow!("get_dashboard({url_path}): {msg}"));
+        }
+
+        Ok(resp.get("result").cloned().unwrap_or(json!(null)))
     }
 
     async fn read_agent_memory(&self, params: &Value) -> Result<Value> {

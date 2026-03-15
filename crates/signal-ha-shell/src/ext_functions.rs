@@ -62,6 +62,10 @@ pub const HA_EXTERNAL_FUNCTIONS: &[&str] = &[
     "tags",
     "del_annotation",
 
+    // ── Dashboards ─────────────────────────────────────────────
+    "list_dashboards",
+    "get_dashboard",
+
     // ── House agent (cross-agent access) ───────────────────────
     "read_agent_memory",
     "read_transcript",

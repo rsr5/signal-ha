@@ -24,13 +24,19 @@ graph TB
         AGENT[signal-ha-agent<br/>LLM Observer]
         SHELL[signal-ha-shell<br/>Monty Runtime]
         BOARD[message-board<br/>Findings API]
+        REC[signal-ha-recorder<br/>State Recorder]
     end
+
+    R[recorder]
 
     P & G & O & L & MORE --> CORE
     P & G & L --> LIGHT
     P & G & L --> AGENT
     AGENT --> SHELL
     AGENT --> BOARD
+    R --> CORE
+    R --> REC
+    REC -->|MySQL / SQLite| DB[(Database)]
 
     CORE <-->|WebSocket| HA
     AGENT -->|conversation/process| CONV
@@ -54,6 +60,7 @@ systemd
 ├── kitchen.service
 ├── message-board.service     (REST API)
 └── house-agent.service       (overseer)
+├── recorder.service          (state recorder → MySQL)
 ```
 
 ### WebSocket-first
@@ -93,6 +100,7 @@ triages findings from individual automation agents, and can escalate issues.
 graph LR
     CORE[signal-ha] --> LIGHTING[signal-ha-lighting]
     CORE --> AGENT[signal-ha-agent]
+    CORE --> REC[signal-ha-recorder]
     AGENT --> SHELL[signal-ha-shell]
     CORE --> PY[signal-ha-py]
     AGENT --> BOARD[message-board]
@@ -103,6 +111,7 @@ graph LR
     style SHELL fill:#2a2a2a,stroke:#808080
     style PY fill:#2a2a2a,stroke:#808080
     style BOARD fill:#2a2a2a,stroke:#808080
+    style REC fill:#2a1a3a,stroke:#9a6ab0
 ```
 
 | Arrow | Means |
@@ -112,3 +121,5 @@ graph LR
 | `signal-ha-agent` → `signal-ha-shell` | Agent executes Python via Monty |
 | `signal-ha` → `signal-ha-py` | Python bindings wrap core types |
 | `signal-ha-agent` → `message-board` | Agent posts findings via REST |
+| `recorder` → `signal-ha-recorder` | Recorder binary uses recorder crate |
+| `signal-ha-recorder` → Database | Records entity states to MySQL/SQLite |

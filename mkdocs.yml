@@ -34,6 +34,7 @@ nav:
       - signal-ha-agent: crates/signal-ha-agent.md
       - signal-ha-shell: crates/signal-ha-shell.md
       - signal-ha-py: crates/signal-ha-py.md
+      - signal-ha-recorder: crates/signal-ha-recorder.md
       - message-board: crates/message-board.md
   - Architecture: architecture.md
   - Getting Started: getting-started.md

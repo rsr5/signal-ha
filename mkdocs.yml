@@ -1,5 +1,6 @@
 site_name: signal-ha
 site_description: Async Rust toolkit for Home Assistant automations
+site_url: https://rsr5.github.io/signal-ha/
 repo_url: https://github.com/rsr5/signal-ha
 repo_name: rsr5/signal-ha
 

@@ -26,6 +26,7 @@
 //! ```
 
 mod client;
+pub mod dashboard;
 mod power_fsm;
 mod scheduler;
 mod status;
@@ -33,6 +34,9 @@ mod types;
 
 pub use client::HaClient;
 pub use client::HaError;
+pub use dashboard::{
+    DashboardInfo, DashboardManager, DashboardSpec, UnknownCard, BUILTIN_CARD_TYPES,
+};
 pub use power_fsm::{CompletedCycle, FsmEvent, PowerFsm, PowerFsmConfig, PowerState};
 pub use scheduler::Scheduler;
 pub use status::StatusPage;

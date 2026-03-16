@@ -85,10 +85,17 @@ enum ClientCmd {
         message: Value,
         reply: PendingTx,
     },
-    /// Subscribe to state changes for an entity.
+    /// Subscribe to state changes for an entity (subscribe_trigger).
     Subscribe {
         subscription_id: u64,
         entity_id: String,
+        reply: PendingTx,
+        event_tx: broadcast::Sender<StateChange>,
+    },
+    /// Subscribe to all events of a given type (subscribe_events).
+    SubscribeEvents {
+        subscription_id: u64,
+        event_type: String,
         reply: PendingTx,
         event_tx: broadcast::Sender<StateChange>,
     },
@@ -345,6 +352,51 @@ impl HaClient {
         Ok(event_rx)
     }
 
+    /// Subscribe to **all** state change events with a single subscription.
+    ///
+    /// Uses HA's `subscribe_events` with `event_type: state_changed`.
+    /// Returns a [`broadcast::Receiver`] that yields [`StateChange`] events
+    /// for every entity in the system.
+    ///
+    /// This is much more efficient than calling [`subscribe_state`] per entity
+    /// when you need to watch many/all entities (e.g. a recorder).
+    pub async fn subscribe_all_state_changes(
+        &self,
+    ) -> Result<broadcast::Receiver<StateChange>> {
+        let id = self.next_id();
+
+        let (event_tx, event_rx) = broadcast::channel::<StateChange>(4096);
+        let (reply_tx, reply_rx) = oneshot::channel();
+
+        self.cmd_tx
+            .send(ClientCmd::SubscribeEvents {
+                subscription_id: id,
+                event_type: "state_changed".to_string(),
+                reply: reply_tx,
+                event_tx,
+            })
+            .await
+            .map_err(|_| HaError::ConnectionClosed)?;
+
+        let resp = reply_rx
+            .await
+            .map_err(|_| HaError::Internal("Reply channel dropped".into()))?;
+
+        let success = resp["success"].as_bool().unwrap_or(false);
+        if !success {
+            let err_msg = resp["error"]["message"]
+                .as_str()
+                .unwrap_or("unknown error");
+            error!(id, error = err_msg, "subscribe_events rejected by HA");
+            return Err(HaError::HaError(format!(
+                "subscribe_events rejected: {err_msg}"
+            )));
+        }
+        info!(id, "Subscribed to all state_changed events");
+
+        Ok(event_rx)
+    }
+
     /// Send an arbitrary WebSocket message (escape hatch).
     ///
     /// The `id` field will be injected automatically.
@@ -478,6 +530,29 @@ impl HaClient {
                         subscriptions.lock().await.remove(&subscription_id);
                     }
                 }
+                ClientCmd::SubscribeEvents {
+                    subscription_id,
+                    event_type,
+                    reply,
+                    event_tx,
+                } => {
+                    subscriptions
+                        .lock()
+                        .await
+                        .insert(subscription_id, event_tx);
+                    let msg = json!({
+                        "id": subscription_id,
+                        "type": "subscribe_events",
+                        "event_type": event_type
+                    });
+                    pending.lock().await.insert(subscription_id, reply);
+                    let text = msg.to_string();
+                    if let Err(e) = sink.send(Message::Text(text.into())).await {
+                        error!(?e, subscription_id, "Failed to send subscribe_events");
+                        pending.lock().await.remove(&subscription_id);
+                        subscriptions.lock().await.remove(&subscription_id);
+                    }
+                }
             }
         }
         debug!("Writer loop ended");
@@ -592,37 +667,36 @@ impl HaClient {
     }
 
     fn parse_state_change_event(msg: &Value) -> Option<StateChange> {
-        let event = &msg["event"]["variables"]["trigger"];
-        let entity_id = event["entity_id"].as_str()?.to_string();
+        // Try subscribe_trigger format first (event.variables.trigger.*)
+        let trigger = &msg["event"]["variables"]["trigger"];
+        if trigger.is_object() {
+            let entity_id = trigger["entity_id"].as_str()?.to_string();
+            let old = Self::try_parse_entity_state(trigger.get("from_state"));
+            let new = Self::try_parse_entity_state(trigger.get("to_state"));
+            return Some(StateChange { entity_id, old, new });
+        }
 
-        // HA subscribe_trigger with platform: state sends "from_state"
-        // and "to_state" (NOT "old_state" / "new_state").
-        let old = event.get("from_state").and_then(|s| {
-            Some(EntityState {
-                state: s["state"].as_str()?.to_string(),
-                attributes: s["attributes"].clone(),
-                last_changed: s["last_changed"]
-                    .as_str()
-                    .and_then(|t| t.parse().ok())
-                    .unwrap_or_default(),
-            })
-        });
+        // Try subscribe_events format (event.data.*)
+        let data = &msg["event"]["data"];
+        if data.is_object() {
+            let entity_id = data["entity_id"].as_str()?.to_string();
+            let old = Self::try_parse_entity_state(data.get("old_state"));
+            let new = Self::try_parse_entity_state(data.get("new_state"));
+            return Some(StateChange { entity_id, old, new });
+        }
 
-        let new = event.get("to_state").and_then(|s| {
-            Some(EntityState {
-                state: s["state"].as_str()?.to_string(),
-                attributes: s["attributes"].clone(),
-                last_changed: s["last_changed"]
-                    .as_str()
-                    .and_then(|t| t.parse().ok())
-                    .unwrap_or_default(),
-            })
-        });
+        None
+    }
 
-        Some(StateChange {
-            entity_id,
-            old,
-            new,
+    fn try_parse_entity_state(val: Option<&Value>) -> Option<EntityState> {
+        let s = val?;
+        Some(EntityState {
+            state: s["state"].as_str()?.to_string(),
+            attributes: s["attributes"].clone(),
+            last_changed: s["last_changed"]
+                .as_str()
+                .and_then(|t| t.parse().ok())
+                .unwrap_or_default(),
         })
     }
 }
@@ -688,5 +762,48 @@ mod tests {
         }"#).unwrap();
 
         assert!(HaClient::parse_state_change_event(&msg).is_none());
+    }
+
+    /// Verify we parse the subscribe_events (state_changed) format correctly.
+    /// HA sends `old_state` / `new_state` under `event.data`.
+    #[test]
+    fn parse_subscribe_events_state_changed() {
+        let msg: Value = serde_json::from_str(r#"{
+            "id": 5,
+            "type": "event",
+            "event": {
+                "event_type": "state_changed",
+                "data": {
+                    "entity_id": "sensor.living_room_temperature",
+                    "old_state": {
+                        "entity_id": "sensor.living_room_temperature",
+                        "state": "21.5",
+                        "attributes": { "unit_of_measurement": "°C" },
+                        "last_changed": "2026-03-05T22:00:00+00:00",
+                        "last_updated": "2026-03-05T22:00:00+00:00"
+                    },
+                    "new_state": {
+                        "entity_id": "sensor.living_room_temperature",
+                        "state": "22.0",
+                        "attributes": { "unit_of_measurement": "°C" },
+                        "last_changed": "2026-03-05T22:01:00+00:00",
+                        "last_updated": "2026-03-05T22:01:00+00:00"
+                    }
+                },
+                "origin": "LOCAL",
+                "time_fired": "2026-03-05T22:01:00+00:00"
+            }
+        }"#).unwrap();
+
+        let change = HaClient::parse_state_change_event(&msg)
+            .expect("should parse subscribe_events event");
+
+        assert_eq!(change.entity_id, "sensor.living_room_temperature");
+
+        let old = change.old.expect("old_state should be Some");
+        assert_eq!(old.state, "21.5");
+
+        let new = change.new.expect("new_state should be Some");
+        assert_eq!(new.state, "22.0");
     }
 }

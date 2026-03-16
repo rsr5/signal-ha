@@ -25,7 +25,8 @@ struct StatsInner {
 }
 
 impl RecorderStats {
-    fn new() -> Self {
+    /// Create a new zeroed stats handle.
+    pub fn new() -> Self {
         Self {
             inner: Arc::new(StatsInner {
                 records_written: AtomicU64::new(0),
@@ -56,15 +57,18 @@ impl RecorderStats {
         self.inner.entities_seen.load(Ordering::Relaxed)
     }
 
-    fn inc_written(&self) {
+    /// Increment the records-written counter.
+    pub fn inc_written(&self) {
         self.inner.records_written.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn inc_errors(&self) {
+    /// Increment the error counter.
+    pub fn inc_errors(&self) {
         self.inner.errors.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn set_entities_seen(&self, n: u64) {
+    /// Set the number of distinct entities seen.
+    pub fn set_entities_seen(&self, n: u64) {
         self.inner.entities_seen.store(n, Ordering::Relaxed);
     }
 }

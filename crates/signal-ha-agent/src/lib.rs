@@ -82,4 +82,5 @@ pub mod ha_tools;
 #[deprecated(note = "Use engine instead — Python runtime replaces Tool dispatch")]
 pub mod tools;
 
+pub use ha_host::HostExtension;
 pub use session::{AgentConfig, AgentHandle};

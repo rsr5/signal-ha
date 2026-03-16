@@ -30,16 +30,22 @@ mod error;
 mod filter;
 mod recorder;
 mod store_trait;
+mod deletion_reason;
+pub mod curator;
 
 #[cfg(feature = "sqlite")]
 mod sqlite;
 #[cfg(feature = "mysql")]
 mod mysql_store;
 
+pub use deletion_reason::DeletionReason;
 pub use error::RecorderError;
 pub use filter::EntityFilter;
 pub use recorder::{backfill_current_states, Recorder, RecorderStats};
-pub use store_trait::{Record, RecordStore};
+pub use store_trait::{
+    AgeBucket, DomainFlagCount, DomainFlagResult, DomainStat, EntityProfile, EntitySummary,
+    FlagPreview, FlagResult, Record, RecordStore, RecentChange, StateCount, UnflagResult,
+};
 
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteStore;

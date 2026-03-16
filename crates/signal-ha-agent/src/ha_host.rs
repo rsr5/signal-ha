@@ -7,12 +7,30 @@
 //!
 //! This is the native equivalent of Signal Deck's `host-functions.ts`.
 
+use std::future::Future;
+use std::pin::Pin;
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::{json, Value};
 use signal_ha::{HaClient, HaError};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
+
+/// Extension point for automation-specific host calls.
+///
+/// Implement this trait to add custom functions that an agent can call
+/// beyond the built-in HA methods.  The recorder uses this to expose
+/// curator tools; other automations can use it for domain-specific queries.
+pub trait HostExtension: Send + Sync {
+    /// Try to handle a host call.  Return `Some(future)` if this extension
+    /// handles `method`, or `None` to fall through to built-in dispatch.
+    fn try_fulfill<'a>(
+        &'a self,
+        method: &'a str,
+        params: &'a Value,
+    ) -> Option<Pin<Box<dyn Future<Output = Result<Value>> + Send + 'a>>>;
+}
 
 /// Everything needed to fulfill HA host calls.
 pub struct HaHost {
@@ -41,6 +59,8 @@ pub struct HaHost {
     pub memory_dir: Option<String>,
     /// Directory for session transcripts (house-agent reads other agents').
     pub transcript_dir: Option<String>,
+    /// Optional extension handler for automation-specific host calls.
+    extension: Option<Box<dyn HostExtension>>,
 }
 
 impl HaHost {
@@ -64,7 +84,14 @@ impl HaHost {
             agent_summary_entity: None,
             memory_dir: None,
             transcript_dir: None,
+            extension: None,
         }
+    }
+
+    /// Register an extension handler for custom host calls.
+    pub fn with_extension(mut self, ext: impl HostExtension + 'static) -> Self {
+        self.extension = Some(Box::new(ext));
+        self
     }
 
     /// Configure the board (findings API) connection.
@@ -180,6 +207,12 @@ impl HaHost {
 
     /// Inner fulfillment logic — called by fulfill() with retry/reconnect wrapping.
     async fn fulfill_inner(&self, method: &str, params: &Value) -> Result<Value> {
+        // Try the extension first — if it handles this method, use its result.
+        if let Some(ext) = &self.extension {
+            if let Some(fut) = ext.try_fulfill(method, params) {
+                return fut.await;
+            }
+        }
         match method {
             "get_state" => self.get_state(params).await,
             "get_states" => self.get_states(params).await,

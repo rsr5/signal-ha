@@ -223,11 +223,7 @@ impl StatusPage {
         let port = self.inner.port;
         let name = self.inner.name.clone();
         tokio::spawn(async move {
-            let app = Router::new()
-                .route("/", get(handle_status))
-                .route("/status", get(handle_status))
-                .with_state(page);
-
+            let app = page.router();
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             match TcpListener::bind(addr).await {
                 Ok(listener) => {
@@ -241,6 +237,27 @@ impl StatusPage {
                 }
             }
         });
+    }
+
+    /// Return an Axum router with the status page routes (`/` and `/status`).
+    ///
+    /// Use this instead of [`spawn`] when you want to merge additional
+    /// routes (e.g. an API) onto the same port:
+    ///
+    /// ```rust,no_run
+    /// use signal_ha::StatusPage;
+    /// use axum::Router;
+    ///
+    /// let status = StatusPage::new("recorder", 9108);
+    /// let app = status.router()
+    ///     .route("/api/health", axum::routing::get(|| async { "ok" }));
+    /// // serve `app` yourself on the port you want
+    /// ```
+    pub fn router(&self) -> Router {
+        Router::new()
+            .route("/", get(handle_status))
+            .route("/status", get(handle_status))
+            .with_state(self.clone())
     }
 }
 

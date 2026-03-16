@@ -91,6 +91,50 @@ pub struct AgentConfig {
     /// If set, the agent is told about the dashboard and gets tools
     /// to inspect it (`list_dashboards()`, `get_dashboard(url_path)`).
     pub dashboard_url_path: Option<String>,
+
+    /// Additional external function names beyond the default agent set.
+    /// These are registered with the Python runtime so the agent can call them.
+    /// The host extension must fulfill these via `HostExtension::try_fulfill()`.
+    pub extra_functions: Vec<String>,
+}
+
+impl AgentConfig {
+    /// Create a config with sensible defaults — override fields with struct
+    /// update syntax:
+    ///
+    /// ```ignore
+    /// AgentConfig {
+    ///     role: AGENT_ROLE.into(),
+    ///     description: AGENT_DESCRIPTION.into(),
+    ///     memory_path: AGENT_MEMORY_PATH.into(),
+    ///     area: Some("kitchen".into()),
+    ///     ..AgentConfig::new("kitchen-agent", client.clone(), ha_host)
+    /// }
+    /// ```
+    pub fn new(
+        name: impl Into<String>,
+        ha_client: HaClient,
+        ha_host: Arc<HaHost>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            role: String::new(),
+            ha_client,
+            conversation_entity: None,
+            description: String::new(),
+            primary_entities: vec![],
+            area: None,
+            max_iterations: 8,
+            default_interval: Duration::MAX,
+            ha_host,
+            memory_path: String::new(),
+            disallowed_calls: vec![],
+            transcript_dir: None,
+            inject_current_time: true,
+            dashboard_url_path: None,
+            extra_functions: vec![],
+        }
+    }
 }
 
 /// Handle to a running agent background task.
@@ -173,6 +217,7 @@ async fn agent_loop(
         transcript_dir: config.transcript_dir,
         inject_current_time: config.inject_current_time,
         dashboard_url_path: config.dashboard_url_path,
+        extra_functions: config.extra_functions,
     };
 
     loop {
@@ -231,6 +276,7 @@ struct SessionCtx {
     transcript_dir: Option<String>,
     inject_current_time: bool,
     dashboard_url_path: Option<String>,
+    extra_functions: Vec<String>,
 }
 
 /// Run a single agent session — one multi-turn conversation.
@@ -277,21 +323,25 @@ async fn run_session(ctx: &SessionCtx) -> Result<Option<Duration>> {
 
     // Initialise the Python engine for this session
     let memory_handle = Arc::new(tokio::sync::Mutex::new(memory));
+    let mut all_functions: Vec<&str> = vec![
+        "write_log",
+        "get_status_page",
+        "schedule_next_session",
+        "get_agent_memory",
+        "set_agent_memory",
+        "board_get_posts",
+        "board_create_post",
+        "board_reply",
+        "board_close_post",
+        "update_agent_summary",
+    ];
+    // Collect references that live long enough for the engine init
+    let extra_refs: Vec<&str> = ctx.extra_functions.iter().map(|s| s.as_str()).collect();
+    all_functions.extend_from_slice(&extra_refs);
     let mut engine = AgentEngine::new(
         ctx.ha_host.clone(),
         "", // no init code needed
-        &[
-            "write_log",
-            "get_status_page",
-            "schedule_next_session",
-            "get_agent_memory",
-            "set_agent_memory",
-            "board_get_posts",
-            "board_create_post",
-            "board_reply",
-            "board_close_post",
-            "update_agent_summary",
-        ],
+        &all_functions,
         ctx.disallowed_calls.clone(),
         memory_handle,
     )?;

@@ -31,7 +31,10 @@ pub struct EntitySummary {
     pub entity_id: String,
     pub row_count: u64,
     pub avg_interval_secs: Option<f64>,
-    pub distinct_states: u64,
+    /// `None` in bulk queries (too expensive on MySQL TEXT columns).
+    /// Populated by `entity_profile`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distinct_states: Option<u64>,
     pub first_seen: Option<DateTime<Utc>>,
     pub last_seen: Option<DateTime<Utc>>,
 }

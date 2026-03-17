@@ -235,7 +235,7 @@ impl RecordStore for MysqlStore {
         } else {
             conn.query(&sql)?
         };
-        fill_distinct_states(&mut conn, rows)
+        Ok(rows_to_summaries(rows))
     }
 
     fn fastest_entities(
@@ -251,7 +251,7 @@ impl RecordStore for MysqlStore {
         } else {
             conn.query(&sql)?
         };
-        fill_distinct_states(&mut conn, rows)
+        Ok(rows_to_summaries(rows))
     }
 
     fn entity_profile(&self, entity_id: &str) -> Result<EntityProfile, RecorderError> {
@@ -598,9 +598,9 @@ fn mysql_entity_summary_sql(
     } else {
         ""
     };
-    // Omit COUNT(DISTINCT state) — it prevents MySQL from using the
-    // covering index idx_entity_ts and causes multi-minute full scans.
-    // distinct_states is filled in by fill_distinct_states() afterward.
+    // Omit COUNT(DISTINCT state) — state is TEXT (unbounded length) so
+    // MySQL can't use a covering index, causing full table scans.
+    // distinct_states is left as None in the returned summaries.
     let sql = format!(
         "SELECT entity_id,
                 COUNT(*) AS row_count,
@@ -618,29 +618,17 @@ fn mysql_entity_summary_sql(
     (sql, prefix.clone())
 }
 
-/// Fill in distinct_states for each entity via targeted indexed queries.
-/// Much faster than COUNT(DISTINCT state) in the GROUP BY (N small queries
-/// vs one full table scan).
-fn fill_distinct_states(
-    conn: &mut mysql::PooledConn,
+fn rows_to_summaries(
     rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>)>,
-) -> Result<Vec<EntitySummary>, RecorderError> {
+) -> Vec<EntitySummary> {
     rows.into_iter()
-        .map(|(entity_id, row_count, avg_interval_secs, first_seen, last_seen)| {
-            let distinct_states: u64 = conn
-                .exec_first(
-                    "SELECT COUNT(DISTINCT state) FROM state_log WHERE entity_id = ?",
-                    (&entity_id,),
-                )?
-                .unwrap_or(0);
-            Ok(EntitySummary {
-                entity_id,
-                row_count,
-                avg_interval_secs,
-                distinct_states,
-                first_seen: first_seen.and_then(|s| parse_mysql_ts(&s)),
-                last_seen: last_seen.and_then(|s| parse_mysql_ts(&s)),
-            })
+        .map(|(entity_id, row_count, avg_interval_secs, first_seen, last_seen)| EntitySummary {
+            entity_id,
+            row_count,
+            avg_interval_secs,
+            distinct_states: None,
+            first_seen: first_seen.and_then(|s| parse_mysql_ts(&s)),
+            last_seen: last_seen.and_then(|s| parse_mysql_ts(&s)),
         })
         .collect()
 }

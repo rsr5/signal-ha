@@ -658,7 +658,7 @@ fn map_entity_summary(row: &rusqlite::Row<'_>) -> Result<EntitySummary, rusqlite
         entity_id: row.get(0)?,
         row_count: row.get::<_, i64>(1)? as u64,
         avg_interval_secs: row.get(2)?,
-        distinct_states: row.get::<_, i64>(5)? as u64,
+        distinct_states: Some(row.get::<_, i64>(5)? as u64),
         first_seen: first_seen.as_deref().and_then(parse_rfc3339),
         last_seen: last_seen.as_deref().and_then(parse_rfc3339),
     })

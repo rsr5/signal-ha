@@ -476,9 +476,37 @@ impl AgentEngine {
                             }
                         }
                         None => {
-                            return format!(
-                                "{combined}Error: Unknown external function '{function_name}'"
-                            );
+                            // Try extension functions registered via extra_functions
+                            if self.extra_functions.iter().any(|f| f == &function_name) {
+                                let params = serde_json::Value::Array(
+                                    args.iter().map(|a| monty_obj_to_json(a)).collect(),
+                                );
+                                match self.ha_host.fulfill(&function_name, &params).await {
+                                    Ok(json_response) => {
+                                        output_so_far = combined;
+                                        current_result = repl::resume_call_with_extras(
+                                            call,
+                                            shell::convert::json_to_monty_obj(&json_response),
+                                            &self.extra_functions,
+                                        );
+                                    }
+                                    Err(e) => {
+                                        warn!(method = function_name, error = %e, "Host call failed");
+                                        output_so_far = combined;
+                                        let error_obj =
+                                            MontyObject::String(format!("Error: {e}"));
+                                        current_result = repl::resume_call_with_extras(
+                                            call,
+                                            error_obj,
+                                            &self.extra_functions,
+                                        );
+                                    }
+                                }
+                            } else {
+                                return format!(
+                                    "{combined}Error: Unknown external function '{function_name}'"
+                                );
+                            }
                         }
                     }
                 }

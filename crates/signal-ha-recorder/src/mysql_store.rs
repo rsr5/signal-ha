@@ -230,12 +230,12 @@ impl RecordStore for MysqlStore {
         let mut conn = self.conn()?;
         let prefix = domain.map(|d| format!("{d}.%"));
         let (sql, p) = mysql_entity_summary_sql(&prefix, "row_count DESC", n);
-        let rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>, u64)> = if let Some(pf) = p {
+        let rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>)> = if let Some(pf) = p {
             conn.exec(&sql, (pf,))?
         } else {
             conn.query(&sql)?
         };
-        Ok(rows.into_iter().map(map_mysql_summary).collect())
+        fill_distinct_states(&mut conn, rows)
     }
 
     fn fastest_entities(
@@ -246,12 +246,12 @@ impl RecordStore for MysqlStore {
         let mut conn = self.conn()?;
         let prefix = domain.map(|d| format!("{d}.%"));
         let (sql, p) = mysql_entity_summary_sql(&prefix, "avg_interval_secs ASC", n);
-        let rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>, u64)> = if let Some(pf) = p {
+        let rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>)> = if let Some(pf) = p {
             conn.exec(&sql, (pf,))?
         } else {
             conn.query(&sql)?
         };
-        Ok(rows.into_iter().map(map_mysql_summary).collect())
+        fill_distinct_states(&mut conn, rows)
     }
 
     fn entity_profile(&self, entity_id: &str) -> Result<EntityProfile, RecorderError> {
@@ -598,14 +598,16 @@ fn mysql_entity_summary_sql(
     } else {
         ""
     };
+    // Omit COUNT(DISTINCT state) — it prevents MySQL from using the
+    // covering index idx_entity_ts and causes multi-minute full scans.
+    // distinct_states is filled in by fill_distinct_states() afterward.
     let sql = format!(
         "SELECT entity_id,
                 COUNT(*) AS row_count,
                 TIMESTAMPDIFF(MICROSECOND, MIN(timestamp), MAX(timestamp))
                     / 1000000.0 / NULLIF(COUNT(*) - 1, 0) AS avg_interval_secs,
                 MIN(timestamp) AS first_seen,
-                MAX(timestamp) AS last_seen,
-                COUNT(DISTINCT state) AS distinct_states
+                MAX(timestamp) AS last_seen
          FROM state_log
          {where_clause}
          GROUP BY entity_id
@@ -616,18 +618,31 @@ fn mysql_entity_summary_sql(
     (sql, prefix.clone())
 }
 
-fn map_mysql_summary(
-    row: (String, u64, Option<f64>, Option<String>, Option<String>, u64),
-) -> EntitySummary {
-    let (entity_id, row_count, avg_interval_secs, first_seen, last_seen, distinct_states) = row;
-    EntitySummary {
-        entity_id,
-        row_count,
-        avg_interval_secs,
-        distinct_states,
-        first_seen: first_seen.and_then(|s| parse_mysql_ts(&s)),
-        last_seen: last_seen.and_then(|s| parse_mysql_ts(&s)),
-    }
+/// Fill in distinct_states for each entity via targeted indexed queries.
+/// Much faster than COUNT(DISTINCT state) in the GROUP BY (N small queries
+/// vs one full table scan).
+fn fill_distinct_states(
+    conn: &mut mysql::PooledConn,
+    rows: Vec<(String, u64, Option<f64>, Option<String>, Option<String>)>,
+) -> Result<Vec<EntitySummary>, RecorderError> {
+    rows.into_iter()
+        .map(|(entity_id, row_count, avg_interval_secs, first_seen, last_seen)| {
+            let distinct_states: u64 = conn
+                .exec_first(
+                    "SELECT COUNT(DISTINCT state) FROM state_log WHERE entity_id = ?",
+                    (&entity_id,),
+                )?
+                .unwrap_or(0);
+            Ok(EntitySummary {
+                entity_id,
+                row_count,
+                avg_interval_secs,
+                distinct_states,
+                first_seen: first_seen.and_then(|s| parse_mysql_ts(&s)),
+                last_seen: last_seen.and_then(|s| parse_mysql_ts(&s)),
+            })
+        })
+        .collect()
 }
 
 fn age_boundaries_mysql(now: DateTime<Utc>) -> Vec<(&'static str, DateTime<Utc>, DateTime<Utc>)> {

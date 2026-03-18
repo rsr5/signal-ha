@@ -181,7 +181,7 @@ impl RecordStore for MysqlStore {
     fn time_range(&self) -> Result<(Option<DateTime<Utc>>, Option<DateTime<Utc>>), RecorderError> {
         let mut conn = self.conn()?;
         let row: Option<(Option<String>, Option<String>)> = conn.query_first(
-            "SELECT MIN(timestamp), MAX(timestamp) FROM state_log",
+            "SELECT CAST(MIN(timestamp) AS CHAR), CAST(MAX(timestamp) AS CHAR) FROM state_log",
         )?;
         let (oldest, newest) = row.unwrap_or((None, None));
         Ok((oldest.and_then(|s| parse_mysql_ts(&s)), newest.and_then(|s| parse_mysql_ts(&s))))
@@ -297,7 +297,7 @@ impl RecordStore for MysqlStore {
             .collect();
 
         let recent_rows: Vec<(String, String)> = conn.exec(
-            "SELECT state, timestamp FROM state_log
+            "SELECT state, CAST(timestamp AS CHAR) FROM state_log
              WHERE entity_id = ?
              ORDER BY timestamp DESC LIMIT 10",
             (entity_id,),
@@ -526,7 +526,7 @@ impl RecordStore for MysqlStore {
         let sample_kept_timestamps = if n > 1 {
             let rows: Vec<(String,)> = conn.exec(
                 &format!(
-                    "SELECT timestamp FROM (
+                    "SELECT CAST(timestamp AS CHAR) FROM (
                          SELECT timestamp, ROW_NUMBER() OVER (ORDER BY timestamp) AS rn
                          FROM state_log
                          WHERE entity_id = ? AND deletion_reason IS NULL {cutoff_clause}

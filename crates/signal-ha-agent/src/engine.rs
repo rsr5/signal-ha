@@ -170,6 +170,7 @@ impl AgentEngine {
                     output,
                     function_name,
                     args,
+                    kwargs,
                     call,
                 } => {
                     call_count += 1;
@@ -478,9 +479,30 @@ impl AgentEngine {
                         None => {
                             // Try extension functions registered via extra_functions
                             if self.extra_functions.iter().any(|f| f == &function_name) {
-                                let params = serde_json::Value::Array(
-                                    args.iter().map(|a| monty_obj_to_json(a)).collect(),
-                                );
+                                let params = if kwargs.is_empty() {
+                                    // Positional-only call → JSON array
+                                    serde_json::Value::Array(
+                                        args.iter().map(|a| monty_obj_to_json(a)).collect(),
+                                    )
+                                } else {
+                                    // Has kwargs → JSON object with named keys
+                                    let mut obj = serde_json::Map::new();
+                                    // Positional args go in as "_pos" array
+                                    if !args.is_empty() {
+                                        obj.insert(
+                                            "_pos".to_string(),
+                                            serde_json::Value::Array(
+                                                args.iter().map(|a| monty_obj_to_json(a)).collect(),
+                                            ),
+                                        );
+                                    }
+                                    for (k, v) in &kwargs {
+                                        if let MontyObject::String(key) = k {
+                                            obj.insert(key.clone(), monty_obj_to_json(v));
+                                        }
+                                    }
+                                    serde_json::Value::Object(obj)
+                                };
                                 match self.ha_host.fulfill(&function_name, &params).await {
                                     Ok(json_response) => {
                                         output_so_far = combined;

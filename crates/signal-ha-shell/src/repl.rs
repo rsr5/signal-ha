@@ -43,6 +43,7 @@ pub enum ReplEvalResult {
         output: String,
         function_name: String,
         args: Vec<MontyObject>,
+        kwargs: Vec<(MontyObject, MontyObject)>,
         call: ReplFunctionCall<NoLimitTracker>,
     },
     /// Snippet failed with an error.
@@ -288,10 +289,12 @@ fn finish_repl_progress(
             ReplProgress::FunctionCall(call) => {
                 let function_name = call.function_name.clone();
                 let args = call.args.clone();
+                let kwargs = call.kwargs.clone();
                 return ReplEvalResult::HostCallNeeded {
                     output,
                     function_name,
                     args,
+                    kwargs,
                     call,
                 };
             }

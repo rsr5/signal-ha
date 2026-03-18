@@ -269,7 +269,7 @@ impl RecordStore for MysqlStore {
             .unwrap_or(0);
 
         let time_span: Option<(Option<String>, Option<String>)> = conn.exec_first(
-            "SELECT MIN(timestamp), MAX(timestamp) FROM state_log WHERE entity_id = ?",
+            "SELECT CAST(MIN(timestamp) AS CHAR), CAST(MAX(timestamp) AS CHAR) FROM state_log WHERE entity_id = ?",
             (entity_id,),
         )?;
 
@@ -606,8 +606,8 @@ fn mysql_entity_summary_sql(
                 COUNT(*) AS row_count,
                 TIMESTAMPDIFF(MICROSECOND, MIN(timestamp), MAX(timestamp))
                     / 1000000.0 / NULLIF(COUNT(*) - 1, 0) AS avg_interval_secs,
-                MIN(timestamp) AS first_seen,
-                MAX(timestamp) AS last_seen
+                CAST(MIN(timestamp) AS CHAR) AS first_seen,
+                CAST(MAX(timestamp) AS CHAR) AS last_seen
          FROM state_log
          {where_clause}
          GROUP BY entity_id

@@ -491,24 +491,7 @@ impl HaClient {
         pending: Arc<Mutex<HashMap<u64, PendingTx>>>,
         subscriptions: Arc<Mutex<HashMap<u64, broadcast::Sender<StateChange>>>>,
     ) {
-        let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
-        ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-        loop {
-            let cmd = tokio::select! {
-                cmd = cmd_rx.recv() => match cmd {
-                    Some(c) => c,
-                    None => break,
-                },
-                _ = ping_interval.tick() => {
-                    // Send WebSocket-level ping to keep connection alive
-                    if let Err(e) = sink.send(Message::Ping(vec![].into())).await {
-                        error!(?e, "Failed to send keepalive ping");
-                        break;
-                    }
-                    continue;
-                }
-            };
+        while let Some(cmd) = cmd_rx.recv().await {
             match cmd {
                 ClientCmd::Send { id, message, reply } => {
                     pending.lock().await.insert(id, reply);

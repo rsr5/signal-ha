@@ -217,4 +217,23 @@ pub trait RecordStore: Send + Sync {
 
     /// Delete rows that were flagged before `grace_cutoff`. Returns rows deleted.
     fn prune_flagged(&self, grace_cutoff: DateTime<Utc>) -> Result<u64, RecorderError>;
+
+    /// Atomically rotate the live `state_log` into the curating slot,
+    /// archiving any pre-existing curating snapshot first.  All renames
+    /// happen in a single atomic operation where the backend supports it.
+    ///
+    /// `curating_qualified` — the curating-slot table (e.g.
+    /// `"signal_recorder_curating.state_log"`).  Always written to.
+    /// `archive_qualified` — where to move a pre-existing curating
+    /// snapshot before the live → curating swap.  Only used if the
+    /// curating slot was non-empty.
+    ///
+    /// After this returns, live writes against the active `state_log`
+    /// land in a fresh empty table; the snapshot lives in the curating
+    /// slot, ready for curation without contention with live writes.
+    fn rotate_for_curation(
+        &self,
+        curating_qualified: &str,
+        archive_qualified: &str,
+    ) -> Result<(), RecorderError>;
 }

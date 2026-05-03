@@ -594,6 +594,19 @@ impl RecordStore for SqliteStore {
         )?;
         Ok(deleted as u64)
     }
+
+    fn rotate_for_curation(
+        &self,
+        _curating_qualified: &str,
+        _archive_qualified: &str,
+    ) -> Result<(), RecorderError> {
+        // SQLite has no cross-database atomic rename; the snapshot/curate
+        // workflow is a MySQL-only feature.  Return an explicit error so
+        // misuse is loud rather than silent.
+        Err(RecorderError::Other(
+            "rotate_for_curation is not supported on SqliteStore — use MysqlStore in production".into(),
+        ))
+    }
 }
 
 fn row_to_record(row: &rusqlite::Row<'_>) -> Result<Record, rusqlite::Error> {

@@ -562,6 +562,64 @@ impl RecordStore for MysqlStore {
         )?;
         Ok(conn.affected_rows())
     }
+
+    fn rotate_for_curation(
+        &self,
+        curating_qualified: &str,
+        archive_qualified: &str,
+    ) -> Result<(), RecorderError> {
+        // Hold write_lock across the swap so concurrent record() calls
+        // can't slip in between the CREATE and the RENAME.  The lock is
+        // released as soon as the metadata ops complete (~milliseconds).
+        let _lock = self.write_lock.lock().unwrap();
+        let mut conn = self.conn()?;
+
+        // Pre-create the empty replacement for the live table (same
+        // schema as the current state_log).
+        conn.query_drop("CREATE TABLE state_log_new LIKE state_log")?;
+
+        // Does a previous snapshot already occupy the curating slot?
+        let (curating_db, curating_tbl) = split_qualified(curating_qualified)?;
+        let prior: Option<u64> = conn.exec_first(
+            "SELECT 1 FROM information_schema.tables
+             WHERE table_schema = ? AND table_name = ? LIMIT 1",
+            (curating_db, curating_tbl),
+        )?;
+
+        // One atomic statement, with up to three renames:
+        //   1. (optional) move stale curating → archive
+        //   2. live state_log → curating
+        //   3. fresh state_log_new → state_log
+        let sql = if prior.is_some() {
+            format!(
+                "RENAME TABLE \
+                 {curating} TO {archive}, \
+                 state_log TO {curating}, \
+                 state_log_new TO state_log",
+                curating = curating_qualified,
+                archive = archive_qualified,
+            )
+        } else {
+            format!(
+                "RENAME TABLE \
+                 state_log TO {curating}, \
+                 state_log_new TO state_log",
+                curating = curating_qualified,
+            )
+        };
+        if let Err(e) = conn.query_drop(&sql) {
+            // Leave the freshly-created replacement around to debug; user
+            // can DROP TABLE state_log_new manually if needed.
+            return Err(e.into());
+        }
+        Ok(())
+    }
+}
+
+/// Split `db.table` into `(db, table)`.
+fn split_qualified(q: &str) -> Result<(&str, &str), RecorderError> {
+    q.split_once('.')
+        .ok_or_else(|| RecorderError::Other(format!("expected db.table, got `{q}`")))
 }
 
 fn row_to_record(row: (String, String, Option<String>, String)) -> Record {

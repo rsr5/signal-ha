@@ -36,5 +36,5 @@ pub use signature::stable_signature;
 pub use target::LightTarget;
 pub use util::{
     as_bool, clamp, clamp_int, ha_brightness_to_pct, kelvin_to_mired, lerp, linmap,
-    pct_to_ha_brightness, safe_float, smoothstep,
+    mired_to_kelvin, pct_to_ha_brightness, safe_float, smoothstep,
 };

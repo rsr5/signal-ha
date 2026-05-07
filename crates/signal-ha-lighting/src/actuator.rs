@@ -230,10 +230,21 @@ impl<H: HAService> Actuator<H> {
             return WriteDecision::Write;
         }
 
-        // On: compare colour temperature
-        if let Some(actual_ct) = actual_attrs.get("color_temp").and_then(|v| v.as_i64())
-        {
-            if (actual_ct as i32 - t.ct_mired).abs() > self.config.ct_tol_mired {
+        // On: compare colour temperature.  HA exposes `color_temp_kelvin`
+        // post-2024; fall back to legacy `color_temp` (mireds) for older
+        // installs and devices that haven't migrated yet.
+        let actual_mired = actual_attrs
+            .get("color_temp_kelvin")
+            .and_then(|v| v.as_i64())
+            .map(|k| crate::util::kelvin_to_mired(k as i32))
+            .or_else(|| {
+                actual_attrs
+                    .get("color_temp")
+                    .and_then(|v| v.as_i64())
+                    .map(|m| m as i32)
+            });
+        if let Some(actual_ct) = actual_mired {
+            if (actual_ct - t.ct_mired).abs() > self.config.ct_tol_mired {
                 return WriteDecision::Write;
             }
         }
@@ -248,9 +259,11 @@ impl<H: HAService> Actuator<H> {
             serde_json::Value::Number(t.brightness.into()),
         );
         if t.ct_mired > 0 {
+            // Modern HA requires color_temp_kelvin; the legacy color_temp
+            // (mireds) key was removed.
             kwargs.insert(
-                "color_temp".into(),
-                serde_json::Value::Number(t.ct_mired.into()),
+                "color_temp_kelvin".into(),
+                serde_json::Value::Number(crate::util::mired_to_kelvin(t.ct_mired).into()),
             );
         }
         if t.transition > 0 {
@@ -367,7 +380,8 @@ mod tests {
         assert_eq!(actuator.ha.calls[0].0, "turn_on");
         assert_eq!(actuator.ha.calls[0].1, "light.kitchen");
         assert_eq!(actuator.ha.calls[0].2["brightness"], 200);
-        assert_eq!(actuator.ha.calls[0].2["color_temp"], 300);
+        // mired 300 → 1_000_000 / 300 = 3333K
+        assert_eq!(actuator.ha.calls[0].2["color_temp_kelvin"], 3333);
     }
 
     #[test]
@@ -425,6 +439,7 @@ mod tests {
         actuator.apply(&targets);
 
         assert!(!actuator.ha.calls[0].2.contains_key("color_temp"));
+        assert!(!actuator.ha.calls[0].2.contains_key("color_temp_kelvin"));
     }
 
     // ── TestGlobalRateLimiting ─────────────────────────────────────

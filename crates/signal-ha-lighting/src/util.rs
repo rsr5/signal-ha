@@ -52,6 +52,18 @@ pub fn kelvin_to_mired(kelvin: i32) -> i32 {
     (1_000_000.0 / kelvin as f64).round() as i32
 }
 
+/// Convert mired to Kelvin.  Inverse of `kelvin_to_mired`.
+///
+/// Returns 0 for non-positive inputs.  Used when sending `light.turn_on`
+/// service calls in modern HA, which requires `color_temp_kelvin`
+/// rather than the now-removed `color_temp` (mireds) parameter.
+pub fn mired_to_kelvin(mired: i32) -> i32 {
+    if mired <= 0 {
+        return 0;
+    }
+    (1_000_000.0 / mired as f64).round() as i32
+}
+
 /// Linear interpolation with clamping.
 ///
 /// Maps `x` from range `[x0, x1]` to `[y0, y1]`, clamping to output range.
@@ -190,6 +202,24 @@ mod tests {
     #[test]
     fn kelvin_to_mired_negative() {
         assert_eq!(kelvin_to_mired(-100), 0);
+    }
+
+    // ── mired_to_kelvin ────────────────────────────────────────────
+    #[test]
+    fn mired_to_kelvin_333() {
+        assert_eq!(mired_to_kelvin(333), 3003);
+    }
+    #[test]
+    fn mired_to_kelvin_154() {
+        assert_eq!(mired_to_kelvin(154), 6494);
+    }
+    #[test]
+    fn mired_to_kelvin_zero() {
+        assert_eq!(mired_to_kelvin(0), 0);
+    }
+    #[test]
+    fn mired_to_kelvin_negative() {
+        assert_eq!(mired_to_kelvin(-1), 0);
     }
 
     // ── linmap ─────────────────────────────────────────────────────

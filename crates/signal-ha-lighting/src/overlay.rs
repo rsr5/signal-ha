@@ -263,7 +263,9 @@ impl<H: OverlayHAService> OverlayManager<H> {
         }
 
         if let Some(k) = snapshot.color_temp_kelvin {
-            kwargs.insert("kelvin".into(), serde_json::json!(k));
+            // Modern HA: use `color_temp_kelvin`; the legacy `kelvin`
+            // alias was removed alongside the mired-based `color_temp`.
+            kwargs.insert("color_temp_kelvin".into(), serde_json::json!(k));
         }
 
         // Colour mode priority: xy > hs > rgb (matches Python)
@@ -473,7 +475,7 @@ mod tests {
         assert_eq!(action, "turn_on");
         assert_eq!(entity, "light.test");
         assert_eq!(kwargs["brightness"], 200);
-        assert_eq!(kwargs["kelvin"], 4000);
+        assert_eq!(kwargs["color_temp_kelvin"], 4000);
     }
 
     #[test]

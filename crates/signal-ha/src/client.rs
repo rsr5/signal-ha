@@ -12,7 +12,7 @@ use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex, Notify};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, trace, warn};
@@ -73,8 +73,13 @@ pub struct HaClient {
     base_url: String,
     /// Auth token for REST API calls.
     token: String,
-    /// Fires when the WebSocket connection is lost.
-    disconnect: Arc<Notify>,
+    /// Sticky signal: flips to `true` the first time the WebSocket connection
+    /// is lost (read error, BrokenPipe on send, or close frame) and stays
+    /// `true` forever after.  Stickiness matters: a late-registering waiter
+    /// (e.g. an automation that's inside an `apply_desired` call when the WS
+    /// dies and only returns to its `select!` afterwards) must still observe
+    /// the disconnect.  The previous `Notify`-based impl lost that race.
+    disconnect_rx: watch::Receiver<bool>,
 }
 
 /// Internal commands sent to the writer task.
@@ -165,19 +170,20 @@ impl HaClient {
         let subscriptions: Arc<Mutex<HashMap<u64, broadcast::Sender<StateChange>>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
-        let disconnect = Arc::new(Notify::new());
+        let (disconnect_tx, disconnect_rx) = watch::channel(false);
 
         tokio::spawn(Self::writer_loop(
             sink,
             cmd_rx,
             pending.clone(),
             subscriptions.clone(),
+            disconnect_tx.clone(),
         ));
         tokio::spawn(Self::reader_loop(
             stream,
             pending,
             subscriptions,
-            disconnect.clone(),
+            disconnect_tx,
         ));
 
         // Derive HTTP base URL from WebSocket URL:
@@ -194,16 +200,25 @@ impl HaClient {
             http: reqwest::Client::new(),
             base_url,
             token: token.to_string(),
-            disconnect,
+            disconnect_rx,
         })
     }
 
     /// Returns a future that resolves when the WebSocket connection is lost.
     ///
+    /// **Sticky**: once the connection has been lost, every subsequent call
+    /// returns immediately.  This matters when the automation is busy doing
+    /// work (e.g. inside an `apply_desired` call) at the exact moment the WS
+    /// dies — the automation will return to its `select!` *after* the
+    /// disconnect signal has already fired, and must still observe it.
+    ///
     /// Automations should select on this alongside their main loop and exit
     /// with an error so systemd can restart the process.
     pub async fn disconnected(&self) {
-        self.disconnect.notified().await;
+        let mut rx = self.disconnect_rx.clone();
+        // wait_for returns Err only if all senders are dropped; in that case
+        // the connection is also gone, so we treat it as disconnect.
+        let _ = rx.wait_for(|&v| v).await;
     }
 
     /// Get the current state of an entity.
@@ -490,16 +505,25 @@ impl HaClient {
         mut cmd_rx: mpsc::Receiver<ClientCmd>,
         pending: Arc<Mutex<HashMap<u64, PendingTx>>>,
         subscriptions: Arc<Mutex<HashMap<u64, broadcast::Sender<StateChange>>>>,
+        disconnect_tx: watch::Sender<bool>,
     ) {
+        // A send failure (BrokenPipe / ConnectionReset) means the WebSocket is
+        // dead from the writer's side.  Without exiting, the writer would keep
+        // happily draining commands from cmd_rx and failing each one in
+        // isolation — leaving the consumer's `disconnected()` arm dormant
+        // forever.  Fire the sticky signal and bail out on the first failure.
         while let Some(cmd) = cmd_rx.recv().await {
-            match cmd {
+            let send_result = match cmd {
                 ClientCmd::Send { id, message, reply } => {
                     pending.lock().await.insert(id, reply);
                     let text = message.to_string();
-                    if let Err(e) = sink.send(Message::Text(text.into())).await {
-                        error!(?e, id, "Failed to send message");
-                        // Remove pending so caller gets an error
-                        pending.lock().await.remove(&id);
+                    match sink.send(Message::Text(text.into())).await {
+                        Ok(()) => Ok(()),
+                        Err(e) => {
+                            error!(?e, id, "Failed to send message");
+                            pending.lock().await.remove(&id);
+                            Err(())
+                        }
                     }
                 }
                 ClientCmd::Subscribe {
@@ -508,12 +532,10 @@ impl HaClient {
                     reply,
                     event_tx,
                 } => {
-                    // Store the subscription channel
                     subscriptions
                         .lock()
                         .await
                         .insert(subscription_id, event_tx);
-                    // Send the subscribe message
                     let msg = json!({
                         "id": subscription_id,
                         "type": "subscribe_trigger",
@@ -524,10 +546,14 @@ impl HaClient {
                     });
                     pending.lock().await.insert(subscription_id, reply);
                     let text = msg.to_string();
-                    if let Err(e) = sink.send(Message::Text(text.into())).await {
-                        error!(?e, subscription_id, "Failed to send subscribe");
-                        pending.lock().await.remove(&subscription_id);
-                        subscriptions.lock().await.remove(&subscription_id);
+                    match sink.send(Message::Text(text.into())).await {
+                        Ok(()) => Ok(()),
+                        Err(e) => {
+                            error!(?e, subscription_id, "Failed to send subscribe");
+                            pending.lock().await.remove(&subscription_id);
+                            subscriptions.lock().await.remove(&subscription_id);
+                            Err(())
+                        }
                     }
                 }
                 ClientCmd::SubscribeEvents {
@@ -547,12 +573,21 @@ impl HaClient {
                     });
                     pending.lock().await.insert(subscription_id, reply);
                     let text = msg.to_string();
-                    if let Err(e) = sink.send(Message::Text(text.into())).await {
-                        error!(?e, subscription_id, "Failed to send subscribe_events");
-                        pending.lock().await.remove(&subscription_id);
-                        subscriptions.lock().await.remove(&subscription_id);
+                    match sink.send(Message::Text(text.into())).await {
+                        Ok(()) => Ok(()),
+                        Err(e) => {
+                            error!(?e, subscription_id, "Failed to send subscribe_events");
+                            pending.lock().await.remove(&subscription_id);
+                            subscriptions.lock().await.remove(&subscription_id);
+                            Err(())
+                        }
                     }
                 }
+            };
+
+            if send_result.is_err() {
+                let _ = disconnect_tx.send(true);
+                break;
             }
         }
         debug!("Writer loop ended");
@@ -562,7 +597,7 @@ impl HaClient {
         mut stream: WsSource,
         pending: Arc<Mutex<HashMap<u64, PendingTx>>>,
         subscriptions: Arc<Mutex<HashMap<u64, broadcast::Sender<StateChange>>>>,
-        disconnect: Arc<Notify>,
+        disconnect_tx: watch::Sender<bool>,
     ) {
         loop {
             match stream.next().await {
@@ -624,7 +659,7 @@ impl HaClient {
                 }
                 Some(Ok(Message::Close(_))) | None => {
                     error!("WebSocket connection closed — signalling disconnect");
-                    disconnect.notify_waiters();
+                    let _ = disconnect_tx.send(true);
                     break;
                 }
                 Some(Err(e)) => {
@@ -658,7 +693,7 @@ impl HaClient {
                     for (_id, tx) in pending.drain() {
                         let _ = tx.send(error_value.clone());
                     }
-                    disconnect.notify_waiters();
+                    let _ = disconnect_tx.send(true);
                     break;
                 }
                 _ => {}
@@ -805,5 +840,36 @@ mod tests {
 
         let new = change.new.expect("new_state should be Some");
         assert_eq!(new.state, "22.0");
+    }
+
+    /// Regression test for the 2026-06-02 stuck-WS bug.
+    ///
+    /// The previous `Notify`-based disconnect signal lost the notification
+    /// when `notify_waiters()` ran *before* any consumer reached
+    /// `notified().await` — exactly what happens when the automation is busy
+    /// inside an `apply_desired` call at the moment the WS dies.
+    ///
+    /// This test pins the sticky semantics we now rely on: a late waiter
+    /// must still observe the signal.
+    #[tokio::test]
+    async fn disconnect_signal_is_sticky_for_late_waiters() {
+        let (tx, rx) = watch::channel(false);
+
+        // Fire the signal *before* anyone is waiting (the racy case).
+        tx.send(true).expect("send should succeed");
+
+        // Now register a waiter — it must return essentially immediately,
+        // not hang.  The 100ms timeout is generous; in practice this resolves
+        // on the first poll because the receiver sees the latest value.
+        let result = tokio::time::timeout(Duration::from_millis(100), async {
+            let mut rx = rx.clone();
+            let _ = rx.wait_for(|&v| v).await;
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "late waiter should see the already-fired disconnect signal"
+        );
     }
 }

@@ -52,6 +52,20 @@ pub fn kelvin_to_mired(kelvin: i32) -> i32 {
     (1_000_000.0 / kelvin as f64).round() as i32
 }
 
+/// Inverse of [`kelvin_to_mired`].  Home Assistant's modern
+/// `light.turn_on` service prefers `color_temp_kelvin`; callers that
+/// internally work in mired (HA's older representation) convert at the
+/// boundary with this rather than doing the reciprocal by hand.
+///
+/// Degenerate inputs (`<= 0`) collapse to `0`, mirroring `kelvin_to_mired`
+/// so the pair round-trips that case symmetrically.
+pub fn mired_to_kelvin(mired: i32) -> i32 {
+    if mired <= 0 {
+        return 0;
+    }
+    (1_000_000.0 / mired as f64).round() as i32
+}
+
 /// Linear interpolation with clamping.
 ///
 /// Maps `x` from range `[x0, x1]` to `[y0, y1]`, clamping to output range.

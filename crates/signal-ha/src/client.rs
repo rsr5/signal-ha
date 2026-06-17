@@ -188,10 +188,31 @@ impl HaClient {
             .trim_end_matches("/api/websocket")
             .to_string();
 
+        // HTTP REST client with an explicit per-request timeout.
+        //
+        // `reqwest::Client::new()` has NO timeout — every request can hang
+        // forever if HA's REST API gets wedged or the underlying TCP
+        // connection goes stale (the latter happens to long-running
+        // automations that sleep for hours between calls).  Without this,
+        // a set_state call mid-scheduler-loop pins the scheduler task
+        // before it reaches its `tokio::select!` over sleep + disconnected
+        // — and when the WS later dies, the Notify-based disconnect
+        // signal has no waiters and is dropped on the floor.  Net effect
+        // is a fully-hung-but-systemd-thinks-alive service.
+        //
+        // 15s is a generous ceiling for HA REST (typical responses are
+        // <100ms); chosen on the "slow enough to ride out a transient
+        // congestion blip, fast enough that the scheduler doesn't lose
+        // a full sleep window to one bad call" trade-off.
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .expect("reqwest::Client::builder failed");
+
         Ok(Self {
             cmd_tx,
             next_id,
-            http: reqwest::Client::new(),
+            http,
             base_url,
             token: token.to_string(),
             disconnect,
